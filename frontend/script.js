@@ -5,7 +5,7 @@ const API_URL = '/api';
 let currentSessionId = null;
 
 // DOM elements
-let chatMessages, chatInput, sendButton, totalCourses, courseTitles;
+let chatMessages, chatInput, sendButton, totalCourses, courseTitles, newChatButton;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sendButton = document.getElementById('sendButton');
     totalCourses = document.getElementById('totalCourses');
     courseTitles = document.getElementById('courseTitles');
-    
+    newChatButton = document.getElementById('newChatButton');
+
     setupEventListeners();
     createNewSession();
     loadCourseStats();
@@ -38,6 +39,11 @@ function setupEventListeners() {
             sendMessage();
         });
     });
+
+    // New chat button
+    if (newChatButton) {
+        newChatButton.addEventListener('click', createNewSession);
+    }
 }
 
 
@@ -122,10 +128,25 @@ function addMessage(content, type, sources = null, isWelcome = false) {
     let html = `<div class="message-content">${displayContent}</div>`;
     
     if (sources && sources.length > 0) {
+        // Build source items as individual elements
+        const sourceItems = sources.map(source => {
+            if (source.link) {
+                return `<a href="${escapeHtml(source.link)}" target="_blank" rel="noopener noreferrer" class="source-item source-link">
+                    <span class="source-icon">&#128279;</span>
+                    <span class="source-text">${escapeHtml(source.text)}</span>
+                </a>`;
+            } else {
+                return `<div class="source-item">
+                    <span class="source-icon">&#128196;</span>
+                    <span class="source-text">${escapeHtml(source.text)}</span>
+                </div>`;
+            }
+        }).join('');
+
         html += `
-            <details class="sources-collapsible">
-                <summary class="sources-header">Sources</summary>
-                <div class="sources-content">${sources.join(', ')}</div>
+            <details class="sources-collapsible" open>
+                <summary class="sources-header">Sources (${sources.length})</summary>
+                <div class="sources-list">${sourceItems}</div>
             </details>
         `;
     }

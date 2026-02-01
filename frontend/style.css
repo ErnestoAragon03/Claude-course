@@ -220,29 +220,83 @@ header h1 {
 
 /* Collapsible Sources */
 .sources-collapsible {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
 }
 
 .sources-collapsible summary {
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.75rem;
     user-select: none;
-    font-weight: 500;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: all 0.2s ease;
 }
 
 .sources-collapsible summary:hover {
     color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .sources-collapsible[open] summary {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
+    border-radius: 8px 8px 0 0;
 }
 
-.sources-content {
-    padding: 0 0.5rem 0.25rem 1.5rem;
-    color: var(--text-secondary);
+/* Sources list container */
+.sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0 0 8px 8px;
+}
+
+/* Individual source item */
+.source-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.source-item.source-link {
+    cursor: pointer;
+}
+
+.source-item.source-link:hover {
+    background: rgba(74, 144, 217, 0.15);
+    border-color: #4a90d9;
+    transform: translateX(4px);
+}
+
+.source-icon {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.source-item .source-text {
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.source-item.source-link .source-text {
+    color: #6bb3f0;
+}
+
+.source-item.source-link:hover .source-text {
+    color: #8ecaff;
 }
 
 /* Markdown formatting styles */
@@ -469,6 +523,31 @@ header h1 {
 
 .stats-header:hover,
 .suggested-header:hover {
+    color: var(--primary-color);
+}
+
+/* New Chat Button */
+.new-chat-button {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    padding: 0.5rem 0;
+    border: none;
+    background: none;
+    transition: color 0.2s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.new-chat-button:hover {
+    color: var(--primary-color);
+}
+
+.new-chat-button:focus {
+    outline: none;
     color: var(--primary-color);
 }
 
