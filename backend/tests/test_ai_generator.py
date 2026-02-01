@@ -335,3 +335,255 @@ class TestAIGeneratorErrorHandling:
         second_call_messages = mock_client.messages.create.call_args_list[1].kwargs["messages"]
         tool_result_content = second_call_messages[2]["content"][0]["content"]
         assert "Search error:" in tool_result_content
+
+
+class TestAIGeneratorSequentialToolCalling:
+    """Tests for sequential tool calling (up to 2 rounds)"""
+
+    @patch('ai_generator.anthropic.Anthropic')
+    def test_sequential_tool_calls_two_rounds(self, mock_anthropic_class):
+        """Test that Claude can make 2 sequential tool calls"""
+        # Arrange
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+
+        # Round 1: Claude wants to get course outline
+        first_tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="get_course_outline",
+                    tool_input={"course_name": "MCP Course"},
+                    tool_id="tool_1"
+                )
+            ]
+        )
+
+        # Round 2: Claude wants to search based on outline results
+        second_tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="search_course_content",
+                    tool_input={"query": "tool calling patterns"},
+                    tool_id="tool_2"
+                )
+            ]
+        )
+
+        # Final: Claude provides answer
+        final_response = MockResponse(
+            stop_reason="end_turn",
+            content=[MockContentBlock(block_type="text", text="Final answer combining both results")]
+        )
+
+        mock_client.messages.create.side_effect = [
+            first_tool_response,
+            second_tool_response,
+            final_response
+        ]
+
+        mock_tool_manager = Mock()
+        mock_tool_manager.execute_tool.side_effect = [
+            "Course outline: Lesson 3 covers tool calling patterns",
+            "Search results: Multiple courses discuss tool calling..."
+        ]
+
+        generator = AIGenerator(api_key="test-key", model="test-model")
+        tools = [{"name": "get_course_outline"}, {"name": "search_course_content"}]
+
+        # Act
+        result = generator.generate_response(
+            query="What topic does lesson 3 cover and what other courses discuss it?",
+            tools=tools,
+            tool_manager=mock_tool_manager
+        )
+
+        # Assert
+        assert result == "Final answer combining both results"
+        assert mock_client.messages.create.call_count == 3
+        assert mock_tool_manager.execute_tool.call_count == 2
+
+    @patch('ai_generator.anthropic.Anthropic')
+    def test_terminates_after_max_rounds(self, mock_anthropic_class):
+        """Test that tool calling stops after MAX_TOOL_ROUNDS even if Claude wants more"""
+        # Arrange
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+
+        # Claude keeps requesting tools (would be infinite without limit)
+        tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="search_course_content",
+                    tool_input={"query": "test"},
+                    tool_id="tool_loop"
+                )
+            ]
+        )
+
+        # After max rounds, final call without tools returns text
+        final_response = MockResponse(
+            stop_reason="end_turn",
+            content=[MockContentBlock(block_type="text", text="Answer after max rounds")]
+        )
+
+        # 1 initial + 2 rounds = 3 API calls total
+        mock_client.messages.create.side_effect = [
+            tool_response,  # Initial response wants tool
+            tool_response,  # Round 1 still wants tool
+            final_response  # Round 2 (max reached, no tools) -> text
+        ]
+
+        mock_tool_manager = Mock()
+        mock_tool_manager.execute_tool.return_value = "Tool result"
+
+        generator = AIGenerator(api_key="test-key", model="test-model")
+
+        # Act
+        result = generator.generate_response(
+            query="test",
+            tools=[{"name": "search_course_content"}],
+            tool_manager=mock_tool_manager
+        )
+
+        # Assert - Should stop after 2 tool execution rounds
+        assert result == "Answer after max rounds"
+        assert mock_client.messages.create.call_count == 3
+        assert mock_tool_manager.execute_tool.call_count == 2
+
+    @patch('ai_generator.anthropic.Anthropic')
+    def test_terminates_early_when_no_tool_use(self, mock_anthropic_class):
+        """Test that loop exits early if Claude doesn't request another tool"""
+        # Arrange
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+
+        # First response: tool use
+        tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="get_course_outline",
+                    tool_input={"course_name": "Test"},
+                    tool_id="tool_1"
+                )
+            ]
+        )
+
+        # Second response: Claude is satisfied, no more tools needed
+        final_response = MockResponse(
+            stop_reason="end_turn",
+            content=[MockContentBlock(block_type="text", text="Got enough info")]
+        )
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        mock_tool_manager = Mock()
+        mock_tool_manager.execute_tool.return_value = "Complete course outline"
+
+        generator = AIGenerator(api_key="test-key", model="test-model")
+
+        # Act
+        result = generator.generate_response(
+            query="test",
+            tools=[{"name": "get_course_outline"}],
+            tool_manager=mock_tool_manager
+        )
+
+        # Assert - Only 2 API calls (initial + 1 round), not 3
+        assert result == "Got enough info"
+        assert mock_client.messages.create.call_count == 2
+        assert mock_tool_manager.execute_tool.call_count == 1
+
+    @patch('ai_generator.anthropic.Anthropic')
+    def test_tool_exception_handled_gracefully(self, mock_anthropic_class):
+        """Test that tool exceptions are caught and passed to Claude"""
+        # Arrange
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+
+        tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="search_course_content",
+                    tool_input={"query": "test"},
+                    tool_id="tool_err"
+                )
+            ]
+        )
+
+        final_response = MockResponse(
+            stop_reason="end_turn",
+            content=[MockContentBlock(block_type="text", text="Handled the error")]
+        )
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        # Tool manager raises an exception
+        mock_tool_manager = Mock()
+        mock_tool_manager.execute_tool.side_effect = Exception("Database connection failed")
+
+        generator = AIGenerator(api_key="test-key", model="test-model")
+
+        # Act - Should not raise, should handle gracefully
+        result = generator.generate_response(
+            query="test",
+            tools=[{"name": "search_course_content"}],
+            tool_manager=mock_tool_manager
+        )
+
+        # Assert - Error message passed to Claude
+        assert result == "Handled the error"
+        second_call = mock_client.messages.create.call_args_list[1]
+        tool_result = second_call.kwargs["messages"][2]["content"][0]["content"]
+        assert "Tool execution error:" in tool_result
+        assert "Database connection failed" in tool_result
+
+    @patch('ai_generator.anthropic.Anthropic')
+    def test_tools_included_in_followup_calls(self, mock_anthropic_class):
+        """Test that tools are included in follow-up API calls (not removed)"""
+        # Arrange
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+
+        tool_response = MockResponse(
+            stop_reason="tool_use",
+            content=[
+                MockContentBlock(
+                    block_type="tool_use",
+                    tool_name="get_course_outline",
+                    tool_input={"course_name": "Test"},
+                    tool_id="tool_1"
+                )
+            ]
+        )
+
+        final_response = MockResponse(
+            stop_reason="end_turn",
+            content=[MockContentBlock(block_type="text", text="Done")]
+        )
+
+        mock_client.messages.create.side_effect = [tool_response, final_response]
+
+        mock_tool_manager = Mock()
+        mock_tool_manager.execute_tool.return_value = "Result"
+
+        generator = AIGenerator(api_key="test-key", model="test-model")
+        tools = [{"name": "get_course_outline"}, {"name": "search_course_content"}]
+
+        # Act
+        generator.generate_response(query="test", tools=tools, tool_manager=mock_tool_manager)
+
+        # Assert - Second API call should include tools
+        second_call = mock_client.messages.create.call_args_list[1]
+        assert "tools" in second_call.kwargs
+        assert second_call.kwargs["tools"] == tools
+        assert second_call.kwargs["tool_choice"] == {"type": "auto"}
