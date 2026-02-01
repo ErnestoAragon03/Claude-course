@@ -1,0 +1,18 @@
+{
+  "name": "course-materials-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Course Materials Assistant",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write \"**/*.{js,css,html}\"",
+    "format:check": "prettier --check \"**/*.{js,css,html}\"",
+    "lint": "eslint \"**/*.js\"",
+    "lint:fix": "eslint \"**/*.js\" --fix",
+    "quality": "npm run format:check && npm run lint",
+    "quality:fix": "npm run format && npm run lint:fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  }
+}
