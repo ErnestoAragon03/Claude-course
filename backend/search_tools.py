@@ -128,6 +128,79 @@ class CourseSearchTool(Tool):
 
         return "\n\n".join(formatted)
 
+
+class CourseOutlineTool(Tool):
+    """Tool for retrieving course outline/structure"""
+
+    def __init__(self, vector_store: VectorStore):
+        self.store = vector_store
+        self.last_sources = []
+
+    def get_tool_definition(self) -> Dict[str, Any]:
+        return {
+            "name": "get_course_outline",
+            "description": "Get the complete outline/structure of a course including all lessons. Use this when users ask about course structure, lesson lists, what topics are covered, or the outline of a course.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "course_title": {
+                        "type": "string",
+                        "description": "The course title to get the outline for (partial matches work, e.g. 'MCP', 'Claude Code')"
+                    }
+                },
+                "required": ["course_title"]
+            }
+        }
+
+    def execute(self, course_title: str) -> str:
+        """
+        Execute the outline tool to get course structure.
+
+        Args:
+            course_title: The course to get the outline for
+
+        Returns:
+            Formatted course outline or error message
+        """
+        # Resolve course name using semantic matching
+        resolved_title = self.store._resolve_course_name(course_title)
+        if not resolved_title:
+            return f"No course found matching '{course_title}'"
+
+        # Get full course metadata
+        all_courses = self.store.get_all_courses_metadata()
+        course_data = next((c for c in all_courses if c.get('title') == resolved_title), None)
+
+        if not course_data:
+            return f"Could not retrieve metadata for course '{resolved_title}'"
+
+        return self._format_outline(course_data)
+
+    def _format_outline(self, course_data: Dict[str, Any]) -> str:
+        """Format course outline for Claude's consumption"""
+        title = course_data.get('title', 'Unknown Course')
+        course_link = course_data.get('course_link', '')
+        lessons = course_data.get('lessons', [])
+
+        lines = [
+            f"Course: {title}",
+            f"Course Link: {course_link}" if course_link else "",
+            f"Total Lessons: {len(lessons)}",
+            "",
+            "Lessons:"
+        ]
+
+        for lesson in lessons:
+            lesson_num = lesson.get('lesson_number', '?')
+            lesson_title = lesson.get('lesson_title', 'Untitled')
+            lines.append(f"  {lesson_num}. {lesson_title}")
+
+        # Track source for UI
+        self.last_sources = [Source(text=title, link=course_link)]
+
+        return "\n".join(line for line in lines if line)
+
+
 class ToolManager:
     """Manages available tools for the AI"""
     
