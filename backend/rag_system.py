@@ -108,7 +108,7 @@ class RAGSystem:
             session_id: Optional session ID for conversation context
             
         Returns:
-            Tuple of (response, sources list - empty for tool-based approach)
+            Tuple of (response, sources list)
         """
         # Create prompt for the AI with clear instructions
         prompt = f"""Answer this question about course materials: {query}"""

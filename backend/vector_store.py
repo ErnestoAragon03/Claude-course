@@ -95,6 +95,17 @@ class VectorStore:
                 n_results=search_limit,
                 where=filter_dict
             )
+            
+            # Enrich results with lesson links
+            if results['metadatas'] and results['metadatas'][0]:
+                for metadata in results['metadatas'][0]:
+                    course_title = metadata.get('course_title')
+                    lesson_number = metadata.get('lesson_number')
+                    if course_title and lesson_number is not None:
+                        link = self.get_lesson_link(course_title, lesson_number)
+                        if link:
+                            metadata['lesson_link'] = link
+
             return SearchResults.from_chroma(results)
         except Exception as e:
             return SearchResults.empty(f"Search error: {str(e)}")
